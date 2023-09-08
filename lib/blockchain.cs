@@ -12,7 +12,11 @@ using System.Text;
 using Base58Check;
 using Nethereum.Util;
 using Nethereum.Signer;
-
+using System.Reflection.Metadata.Ecma335;
+using Nethereum.Model;
+using Nethereum.ABI.Util;
+using Nethereum.RLP;
+using ADRaffy.ENSNormalize;
 
 namespace Eluvio
 {
@@ -22,7 +26,7 @@ namespace Eluvio
 
         private void commonConstruct(string url, string contractAddress)
         {
-            account = new Account(this.Key);
+            account = new Nethereum.Web3.Accounts.Account(this.Key);
             web3 = new Web3(this.account, url);
             contractHandler = web3.Eth.GetContractHandler(contractAddress);
             contentService = new BaseContentService(web3, contractAddress);
@@ -43,75 +47,71 @@ namespace Eluvio
             var res = await this.contentService.UpdateRequestRequestAndWaitForReceiptAsync();
             return res;
         }
+
+        private static byte[] Hexify(string val)
+        {
+            if (val[0] == '0' && val[1] == 'x')
+            {
+                val = val[2..];
+            }
+            return Enumerable.Range(0, val.Length)
+                     .Where(x => x % 2 == 0)
+                     .Select(x => Convert.ToByte(val.Substring(x, 2), 16))
+                     .ToArray();
+        }
         public async Task<string> MakeToken(string spaceID)
         {
             var tx = await UpdateRequest();
-            // var adr = new EthECKey(Key).GetPubKey();
             var ethECKey = new EthECKey(new EthECKey(Key).GetPubKey(), true);
             var adr = ethECKey.GetPublicAddress();
-            var txh = tx.TransactionHash.Substring(2);
-            byte[] txhBytes = Enumerable.Range(0, txh.Length)
-                     .Where(x => x % 2 == 0)
-                     .Select(x => Convert.ToByte(txh.Substring(x, 2), 16))
-                     .ToArray();
+            Console.WriteLine("Public Address: " + adr);
+            var txh = tx.TransactionHash;
+            byte[] txhBytes = Hexify(txh);
+            byte[] adrBytes = Hexify(adr);
             var jsonToken = new
             {
-                txh = Convert.ToBase64String(txhBytes),
-                adr = Convert.ToBase64String(Encoding.UTF8.GetBytes(adr.Substring(2))),
-                spc = "ispc" + Base58Check.Base58CheckEncoding.Encode(Encoding.UTF8.GetBytes(spaceID)),
+                // txh = Convert.ToBase64String(txhBytes),
+                adr = Convert.ToBase64String(adrBytes),
+                spc = "ispc" + spaceID,
+                qid = "iq__777666555ABCDEF",
+                sub = "subject007",
+                iat = -1,
+                gra = "update",
+                exp = -1,
             };
             var strToken = JsonSerializer.Serialize(jsonToken);
             Console.WriteLine("token= " + strToken);
+            byte[] message = Encoding.UTF8.GetBytes(strToken);
 
-            byte[] hashedBytes = HashString(strToken);
-            // Signing
-            byte[] signature = SignString(hashedBytes);
-            string signatureString = "ascpj" + Base58Check.Base58CheckEncoding.Encode(signature);
+            var signer = new EthereumMessageSigner();
+            var hashedStr = HashString(strToken);
+            var sigStr = signer.Sign(hashedStr, Key)[2..];
+            Console.WriteLine("Signature: " + sigStr);
+            byte[] signature = Hexify(sigStr);
+
+
+            // // Signing
+            byte[] concat = signature.Concat(message).ToArray();
+
+            string signatureString = "ascsj_" + SimpleBase.Base58.Bitcoin.Encode(concat);
             Console.WriteLine("Signature: " + signatureString);
 
             // Verification
-            bool isVerified = VerifySignature(hashedBytes, signature);
-            Console.WriteLine("Signature Verification: " + isVerified);
+            // bool isVerified = VerifySignature(hashedBytes, signature);
+            // Console.WriteLine("Signature Verification: " + isVerified);
 
             return signatureString;
 
         }
 
-        private byte[] HashString(string input)
+        private static byte[] HashString(string input)
         {
-            using (SHA256 sha256 = SHA256.Create())
-            {
-                byte[] inputBytes = Encoding.UTF8.GetBytes(input);
-                return sha256.ComputeHash(inputBytes);
-            }
+            return Encoding.UTF8.GetBytes(Sha3Keccack.Current.CalculateHash(input));
         }
 
-        private byte[] SignString(byte[] inputBytes)
-        {
-            using (RSACryptoServiceProvider rsa = new RSACryptoServiceProvider())
-            {
-                var ethECKey = new EthECKey(Key);
-                // Get the necessary components from EthECKey
-                var signature = ethECKey.Sign(inputBytes);
-                // Convert the 64-byte signature to a 58-byte format
-                return signature.ToDER();
-                // return EthECDSASignatureFactory.ToEthECDSASignature(signature).ToDER();
-            }
-        }
-
-        private bool VerifySignature(byte[] inputBytes, byte[] signature)
-        {
-            using (RSACryptoServiceProvider rsa = new RSACryptoServiceProvider())
-            {
-                // Replace with the corresponding public key
-                var ethECKey = new EthECKey(Key);
-                EthECDSASignature eds = EthECDSASignature.FromDER(signature);
-                return ethECKey.Verify(inputBytes, eds);
-            }
-        }
 
         public string Key { get; private set; }
-        private Account account;
+        private Nethereum.Web3.Accounts.Account account;
         private Web3 web3;
         private Nethereum.Contracts.ContractHandlers.ContractHandler contractHandler;
         private BaseContentService contentService;

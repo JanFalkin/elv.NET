@@ -17,6 +17,7 @@ using Nethereum.Model;
 using Nethereum.ABI.Util;
 using Nethereum.RLP;
 using ADRaffy.ENSNormalize;
+using Nethereum.Hex.HexTypes;
 
 namespace Eluvio
 {
@@ -59,26 +60,20 @@ namespace Eluvio
                      .Select(x => Convert.ToByte(val.Substring(x, 2), 16))
                      .ToArray();
         }
-        public async Task<string> MakeToken(string spaceID)
+        public async Task<string> MakeToken(string prefix, Dictionary<string, object> jsonToken)
         {
             var tx = await UpdateRequest();
-            var ethECKey = new EthECKey(new EthECKey(Key).GetPubKey(), true);
-            var adr = ethECKey.GetPublicAddress();
-            Console.WriteLine("Public Address: " + adr);
+            var ethECKey = new EthECKey(Key);
+            var adr = ethECKey.GetPublicAddressAsBytes();
+            Console.WriteLine("Public Address: " + ethECKey.GetPublicAddress());
             var txh = tx.TransactionHash;
             byte[] txhBytes = Hexify(txh);
-            byte[] adrBytes = Hexify(adr);
-            var jsonToken = new
+
+            if (prefix == "atxsj_")
             {
-                // txh = Convert.ToBase64String(txhBytes),
-                adr = Convert.ToBase64String(adrBytes),
-                spc = "ispc" + spaceID,
-                qid = "iq__777666555ABCDEF",
-                sub = "subject007",
-                iat = -1,
-                gra = "update",
-                exp = -1,
-            };
+                jsonToken.Add("txh", Convert.ToBase64String(txhBytes));
+            }
+            jsonToken.Add("adr", Convert.ToBase64String(adr));
             var strToken = JsonSerializer.Serialize(jsonToken);
             Console.WriteLine("token= " + strToken);
             byte[] message = Encoding.UTF8.GetBytes(strToken);
@@ -93,12 +88,8 @@ namespace Eluvio
             // // Signing
             byte[] concat = signature.Concat(message).ToArray();
 
-            string signatureString = "ascsj_" + SimpleBase.Base58.Bitcoin.Encode(concat);
+            string signatureString = prefix + SimpleBase.Base58.Bitcoin.Encode(concat);
             Console.WriteLine("Signature: " + signatureString);
-
-            // Verification
-            // bool isVerified = VerifySignature(hashedBytes, signature);
-            // Console.WriteLine("Signature Verification: " + isVerified);
 
             return signatureString;
 

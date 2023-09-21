@@ -11,6 +11,7 @@ using System.Security.Cryptography;
 using System.Net.Http.Headers;
 using System.Text;
 using Base58Check;
+using SimpleBase;
 using Nethereum.Util;
 using System.Reflection.Metadata.Ecma335;
 using Nethereum.Model;
@@ -24,11 +25,38 @@ using Elv.NET.Contracts.BaseContentSpace;
 using Nethereum.RPC.Eth.DTOs;
 using Elv.NET.Contracts.BaseContentSpace.ContractDefinition;
 using Nethereum.Contracts;
+using Newtonsoft.Json.Linq;
+using System.Net.Http.Json;
 
 namespace Eluvio
 {
     public class BlockchainPrimitives
     {
+
+        static async Task<string> CallFunction(string url, string token, JArray metadata)
+        {
+            HttpClient client = new();
+
+            // Set the authentication token in the request headers
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+            // Create the request content with the metadata
+            HttpContent content = new StringContent(metadata.ToString());
+            content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+
+            // Send the POST request to the specified URL
+            HttpResponseMessage response = await client.PostAsync(url, content);
+
+            // Handle the response
+            if (response.IsSuccessStatusCode)
+            {
+                return await response.Content.ReadAsStringAsync();
+            }
+            else
+            {
+                return "";
+            }
+        }
 
         static async Task<string> CallRestApi(string url, string token)
         {
@@ -60,13 +88,13 @@ namespace Eluvio
         {
             return await CallRestApi("https://host-76-74-91-7.contentfabric.io/doc?redirected=true#get-metadata-subtree".ToString(), token);
         }
-        static async Task<string> UpdateMetadata(string token)
+        static async Task<string> UpdateMetadata(string token, JArray jsonUpdate)
         {
-            return await CallRestApi("https://host-76-74-91-7.contentfabric.io/doc?redirected=true#replace-metadata-subtree".ToString(), token);
+            return await CallFunction("https://host-76-74-91-7.contentfabric.io/doc?redirected=true#replace-metadata-subtree".ToString(), token, jsonUpdate);
         }
-        static async Task<string> FinalizeContent(string token)
+        static async Task<string> FinalizeContent(string token, JArray jsonUpdate)
         {
-            return await CallRestApi("https://host-76-74-91-7.contentfabric.io/doc?redirected=true#finalize-draft-content".ToString(), token);
+            return await CallFunction("https://host-76-74-91-7.contentfabric.io/doc?redirected=true#finalize-draft-content".ToString(), token, jsonUpdate);
         }
 
 
@@ -100,6 +128,29 @@ namespace Eluvio
             var res = await contentService.UpdateRequestRequestAndWaitForReceiptAsync();
             return res;
         }
+
+        public static string FabricIdFromBlckchainAdress(string prefix, string bcAdress)
+        {
+            if (bcAdress[..2] == "0x")
+            {
+                bcAdress = bcAdress[2..];
+            }
+            return prefix + Base58.Bitcoin.Encode(BlockchainPrimitives.Hexify(bcAdress));
+        }
+
+        public static string QIDFromBlockchainAddress(string bcAdress)
+        {
+            return FabricIdFromBlckchainAdress("iq__", bcAdress);
+        }
+        public static string SpaceFromBlockchainAddress(string bcAdress)
+        {
+            return FabricIdFromBlckchainAdress("ispc", bcAdress);
+        }
+        public static string LibFromBlockchainAddress(string bcAdress)
+        {
+            return FabricIdFromBlckchainAdress("ilib", bcAdress);
+        }
+
 
         private static byte[] Hexify(string val)
         {
@@ -151,15 +202,24 @@ namespace Eluvio
 
         }
 
-        public async Task<string> CreateContent()
+        public async Task<string> CreateContentType()
         {
             var ct = await spaceService.CreateContentTypeRequestAndWaitForReceiptAsync();
             var cctReceipt = ct.DecodeAllEvents<CreateContentTypeEventDTO>();
+            return cctReceipt[0].Event.ContentTypeAddress;
+        }
 
-            var lib = await spaceService.CreateLibraryRequestAndWaitForReceiptAsync("0x501382E5f15501427D1Fc3d93e949C96b25A2224");
+        public async Task<string> CreateLibrary(string space)
+        {
+            // should be using space "0x501382E5f15501427D1Fc3d93e949C96b25A2224"
+            var lib = await spaceService.CreateLibraryRequestAndWaitForReceiptAsync(space);
             var libReceipt = lib.DecodeAllEvents<CreateLibraryEventDTO>();
+            return libReceipt[0].Event.LibraryAddress;
+        }
 
-            var content = await spaceService.CreateContentRequestAndWaitForReceiptAsync(libReceipt[0].Event.LibraryAddress, cctReceipt[0].Event.ContentTypeAddress);
+        public async Task<string> CreateContent(string contentTypeAddress, string libraryAddress)
+        {
+            var content = await spaceService.CreateContentRequestAndWaitForReceiptAsync(libraryAddress, contentTypeAddress);
             var contentReceipt = content.DecodeAllEvents<CreateContentEventDTO>();
 
             return contentReceipt[0].Event.ContentAddress;

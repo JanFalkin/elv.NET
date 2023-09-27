@@ -27,10 +27,22 @@ using Elv.NET.Contracts.BaseContentSpace.ContractDefinition;
 using Nethereum.Contracts;
 using Newtonsoft.Json.Linq;
 using System.Net.Http.Json;
+using Nethereum.JsonRpc.Client.RpcMessages;
 
 namespace Eluvio
 {
-    public class BlockchainPrimitives
+    public interface IBlockchainPrimitives
+    {
+        string Key { get; }
+
+        Task<string> CreateContent(string contentTypeAddress, string libraryAddress);
+        Task<string> CreateContentType();
+        Task<string> CreateLibrary(string space);
+        string MakeToken(string prefix, Dictionary<string, object> jsonToken, bool verify = true);
+        TransactionReceipt UpdateRequest(string contractAddress);
+    }
+
+    public class BlockchainPrimitives : IBlockchainPrimitives
     {
 
         static async Task<string> CallFunction(string url, string token, JArray metadata)
@@ -123,10 +135,12 @@ namespace Eluvio
             CommonConstruct(url, contractAddress);
             this.tw = tw;
         }
-        public async Task<Nethereum.RPC.Eth.DTOs.TransactionReceipt> UpdateRequest()
+        public Nethereum.RPC.Eth.DTOs.TransactionReceipt UpdateRequest(string contractAddress)
         {
-            var res = await contentService.UpdateRequestRequestAndWaitForReceiptAsync();
-            return res;
+            BaseContentService cs = new(web3, contractAddress);
+            var res = cs.UpdateRequestRequestAndWaitForReceiptAsync();
+            res.Wait();
+            return res.Result;
         }
 
         public static string FabricIdFromBlckchainAdress(string prefix, string bcAdress)
@@ -135,7 +149,7 @@ namespace Eluvio
             {
                 bcAdress = bcAdress[2..];
             }
-            return prefix + Base58.Bitcoin.Encode(BlockchainPrimitives.Hexify(bcAdress));
+            return prefix + Base58.Bitcoin.Encode(BlockchainPrimitives.DecodeString(bcAdress));
         }
 
         public static string QIDFromBlockchainAddress(string bcAdress)
@@ -152,7 +166,7 @@ namespace Eluvio
         }
 
 
-        private static byte[] Hexify(string val)
+        private static byte[] DecodeString(string val)
         {
             if (val[0] == '0' && val[1] == 'x')
             {
@@ -163,40 +177,60 @@ namespace Eluvio
                      .Select(x => Convert.ToByte(val.Substring(x, 2), 16))
                      .ToArray();
         }
-        public async Task<string> MakeToken(string prefix, Dictionary<string, object> jsonToken)
-        {
-            var tx = await UpdateRequest();
-            var ethECKey = new EthECKey(Key);
-            var adr = ethECKey.GetPublicAddressAsBytes();
-            Console.WriteLine("Public Address: " + ethECKey.GetPublicAddress());
-            var txh = tx.TransactionHash;
-            byte[] txhBytes = Encoding.UTF8.GetBytes(tx.BlockHash[2..]);
 
-            if (prefix[..3] == "atx")
-            {
-                jsonToken.Add("txh", Convert.ToBase64String(txhBytes));
-            }
-            jsonToken.Add("adr", Convert.ToBase64String(adr));
-            var strToken = JsonSerializer.Serialize(jsonToken);
-            Console.WriteLine("token= " + strToken);
-            byte[] message = Encoding.UTF8.GetBytes(strToken);
+        private static string EncodeBytes(byte[] bytes)
+        {
+            string hexString = BitConverter.ToString(bytes).Replace("-", "");
+            return "0x" + hexString;
+        }
+
+        private static byte[] SignMessage(EthECKey key, byte[] hashedBytes, out string signed, out EthECDSASignature ethECDSASignature)
+        {
+            var signer = new EthereumMessageSigner();
+            ethECDSASignature = signer.SignAndCalculateV(hashedBytes, key);
+            signed = ethECDSASignature.CreateStringSignature();
+            var decoded = DecodeString(signed);
+            return decoded;
+        }
+
+        // private static bool Verify(byte[] signature, )
+        // {
+
+        // }
+        public string MakeToken(string prefix, Dictionary<string, object> jsonToken, bool verify = true)
+        {
+            tw ??= Console.Out;
+            var ethECKey = new EthECKey(Key);
+            jsonToken.Add("adr", ethECKey.GetPublicAddressAsBytes());
+            var tok = JsonSerializer.Serialize(jsonToken);
+            var strToken = tok;
+            //var strToken = "\x19Ethereum Signed Message:\n" + tok.Length + tok;
+            tw.WriteLine("token= " + strToken);
+            byte[] hashedBytes = DecodeString(new Sha3Keccack().CalculateHash(strToken));
+            tw.WriteLine(BitConverter.ToString(hashedBytes));//.Replace("-", ""));
 
             byte[] signature = Array.Empty<byte>();
             if (prefix[3] == 's')
             {
-                var signer = new EthereumMessageSigner();
-                var hashedStr = HashString(strToken);
-                var sigStr = signer.Sign(Encoding.UTF8.GetBytes(hashedStr), ethECKey)[2..];
-                Console.WriteLine("Signature: " + sigStr);
-                signature = Hexify(sigStr);
-                var addressRec1 = signer.EncodeUTF8AndEcRecover(hashedStr, sigStr);
-                Console.WriteLine("Address from Recover: " + addressRec1);
+                signature = SignMessage(ethECKey, hashedBytes, out string sig, out EthECDSASignature ethECDSA);
+                if (verify)
+                {
+                    tw.WriteLine("signature bytes:" + BitConverter.ToString(signature));
+                    var signer = new EthereumMessageSigner();
+                    var addressRec1 = signer.EcRecover(hashedBytes, sig);
+                    var pa = ethECKey.GetPublicAddress();
+                    if (addressRec1 != pa)
+                    {
+                        //throw new Exception(string.Format("address signed = {0}, address recovered = {1}", addressRec1, pa));
+                    }
+
+                }
             }
             // // Signing
-            byte[] concat = signature.Concat(message).ToArray();
+            byte[] concat = signature.Concat(Encoding.UTF8.GetBytes(strToken)).ToArray();
 
-            string signatureString = prefix + SimpleBase.Base58.Bitcoin.Encode(concat);
-            Console.WriteLine("Signature: " + signatureString);
+            string signatureString = prefix + Base58.Bitcoin.Encode(concat);
+            tw.WriteLine("Signature: " + signatureString);
 
             return signatureString;
 

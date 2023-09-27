@@ -5,6 +5,7 @@ using Nethereum.Util;
 using NethereumSample.BaseContent.ContractDefinition;
 using System.Diagnostics;
 using SimpleBase;
+using System.Text;
 
 namespace libtest
 {
@@ -56,30 +57,26 @@ namespace libtest
                 {"exp", -1},
             };
                 var tupdate = bcp.MakeToken("ascsj_", jsonUpdate);
-                Debug.WriteLine(string.Format("Token Update = {0}", tupdate.Result));
-                tupdate.Wait();
+                TestContext.Progress.WriteLine(string.Format("Token Update = {0}", tupdate));
                 var tupdateu = bcp.MakeToken("ascuj_", jupdate2);
-                Debug.WriteLine(string.Format("Token Update = {0}", tupdateu.Result));
-                tupdate.Wait();
+                TestContext.Progress.WriteLine(string.Format("Token Update = {0}", tupdateu));
                 Dictionary<string, object> jsonTxn = new()
             {
                 { "spc", $"ispc{spaceID}" },
             };
                 var t = bcp.MakeToken("atxsj_", jsonTxn);
-                t.Wait();
                 //Assert.AreNotEqual(t.Result, null);
-                Debug.WriteLine(string.Format("Token = {0}", t.Result));
+                TestContext.Progress.WriteLine(string.Format("Token = {0}", t));
                 Dictionary<string, object> jsonU = new()
             {
                 { "spc", $"ispc{spaceID}" },
             };
                 var tl = bcp.MakeToken("atxuj_", jsonU);
-                tl.Wait();
-                Debug.WriteLine(string.Format("Token u = {0}", tl.Result));
+                TestContext.Progress.WriteLine(string.Format("Token u = {0}", tl));
             }
             catch (Exception e)
             {
-                Console.WriteLine("e = {0}", e);
+                TestContext.Progress.WriteLine("e = {0}", e);
                 Assert.Fail();
             }
 
@@ -106,6 +103,19 @@ namespace libtest
                     Assert.That(content.IsCompletedSuccessfully);
                     Assert.That(content.Result, Is.Not.EqualTo(""));
                 });
+
+                var res = bcp.UpdateRequest(content.Result);
+                var qid = BlockchainPrimitives.QIDFromBlockchainAddress(content.Result);
+                // tw.WriteLine("Public Address: " + ethECKey.GetPublicAddress());
+                byte[] txhBytes = Encoding.UTF8.GetBytes(res.TransactionHash[2..]);
+                Dictionary<string, object> updateJson = new()
+                {
+                    { "spc", BlockchainPrimitives.SpaceFromBlockchainAddress("0x501382E5f15501427D1Fc3d93e949C96b25A2224") },
+                    { "txh", Convert.ToBase64String(txhBytes) }
+                };
+                var token = bcp.MakeToken("atxsj_", updateJson);
+                TestContext.Progress.WriteLine(" Token = {0} \n content = {1}\n fabid = {2}", token, content.Result, qid);
+
             }
             catch (Exception e)
             {

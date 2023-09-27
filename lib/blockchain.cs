@@ -38,7 +38,7 @@ namespace Eluvio
         Task<string> CreateContent(string contentTypeAddress, string libraryAddress);
         Task<string> CreateContentType();
         Task<string> CreateLibrary(string space);
-        string MakeToken(string prefix, Dictionary<string, object> jsonToken, bool verify = true);
+        string MakeToken(string prefix, Dictionary<string, object> jsonToken);
         TransactionReceipt UpdateRequest(string contractAddress);
     }
 
@@ -184,11 +184,11 @@ namespace Eluvio
             return "0x" + hexString;
         }
 
-        private static byte[] SignMessage(EthECKey key, byte[] hashedBytes, out string signed, out EthECDSASignature ethECDSASignature)
+        private static byte[] SignMessage(EthECKey key, byte[] hashedBytes)
         {
             var signer = new EthereumMessageSigner();
-            ethECDSASignature = signer.SignAndCalculateV(hashedBytes, key);
-            signed = ethECDSASignature.CreateStringSignature();
+            var ethECDSASignature = signer.SignAndCalculateV(hashedBytes, key);
+            var signed = ethECDSASignature.CreateStringSignature();
             var decoded = DecodeString(signed);
             return decoded;
         }
@@ -197,7 +197,7 @@ namespace Eluvio
         // {
 
         // }
-        public string MakeToken(string prefix, Dictionary<string, object> jsonToken, bool verify = true)
+        public string MakeToken(string prefix, Dictionary<string, object> jsonToken)
         {
             tw ??= Console.Out;
             var ethECKey = new EthECKey(Key);
@@ -212,19 +212,7 @@ namespace Eluvio
             byte[] signature = Array.Empty<byte>();
             if (prefix[3] == 's')
             {
-                signature = SignMessage(ethECKey, hashedBytes, out string sig, out EthECDSASignature ethECDSA);
-                if (verify)
-                {
-                    tw.WriteLine("signature bytes:" + BitConverter.ToString(signature));
-                    var signer = new EthereumMessageSigner();
-                    var addressRec1 = signer.EcRecover(hashedBytes, sig);
-                    var pa = ethECKey.GetPublicAddress();
-                    if (addressRec1 != pa)
-                    {
-                        //throw new Exception(string.Format("address signed = {0}, address recovered = {1}", addressRec1, pa));
-                    }
-
-                }
+                signature = SignMessage(ethECKey, hashedBytes);
             }
             // // Signing
             byte[] concat = signature.Concat(Encoding.UTF8.GetBytes(strToken)).ToArray();

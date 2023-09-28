@@ -29,6 +29,7 @@ using Newtonsoft.Json.Linq;
 using System.Net.Http.Json;
 using Nethereum.JsonRpc.Client.RpcMessages;
 
+
 namespace Eluvio
 {
     public interface IBlockchainPrimitives
@@ -44,6 +45,7 @@ namespace Eluvio
 
     public class BlockchainPrimitives : IBlockchainPrimitives
     {
+        readonly static string baseURL = "https://demov3.net955210.contentfabric.io/";
 
         static async Task<string> CallFunction(string url, string token, JArray metadata)
         {
@@ -57,6 +59,7 @@ namespace Eluvio
             content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
 
             // Send the POST request to the specified URL
+
             HttpResponseMessage response = await client.PostAsync(url, content);
 
             // Handle the response
@@ -91,22 +94,27 @@ namespace Eluvio
             return "";
         }
 
-        static async Task<string> CallEditContent(string token)
+        public static async Task<string> CallEditContent(string token, string libid, string qid)
         {
-            return await CallRestApi("https://host-76-74-91-7.contentfabric.io/doc?redirected=true#create-draft-content-with-id".ToString(), token);
+            var url = BlockchainPrimitives.baseURL + String.Format("qlibs/{0}/q/{1}", libid, qid);
+            Console.WriteLine("url = {0} token={1}", url, token);
+            return await CallFunction(url, token, new JArray());
         }
 
-        static async Task<string> CallGetMetadata(string token)
+        public static async Task<string> CallGetMetadata(string token, string libid, string qid)
         {
-            return await CallRestApi("https://host-76-74-91-7.contentfabric.io/doc?redirected=true#get-metadata-subtree".ToString(), token);
+            var url = BlockchainPrimitives.baseURL + String.Format("qlibs/{0}/q/{1}/meta", libid, qid);
+            return await CallRestApi(url, token);
         }
-        static async Task<string> UpdateMetadata(string token, JArray jsonUpdate)
+        public static async Task<string> UpdateMetadata(string token, string libid, string qid, JArray jsonUpdate)
         {
-            return await CallFunction("https://host-76-74-91-7.contentfabric.io/doc?redirected=true#replace-metadata-subtree".ToString(), token, jsonUpdate);
+            var url = BlockchainPrimitives.baseURL + String.Format("qlibs/{0}/q/{1}/meta", libid, qid);
+            return await CallFunction(url, token, jsonUpdate);
         }
-        static async Task<string> FinalizeContent(string token, JArray jsonUpdate)
+        public static async Task<string> FinalizeContent(string token, string libid, string qwt)
         {
-            return await CallFunction("https://host-76-74-91-7.contentfabric.io/doc?redirected=true#finalize-draft-content".ToString(), token, jsonUpdate);
+            var url = BlockchainPrimitives.baseURL + String.Format("qlibs/{0}/q/{1}/meta", libid, qwt);
+            return await CallFunction(url, token, new JArray());
         }
 
 
@@ -204,7 +212,6 @@ namespace Eluvio
             jsonToken.Add("adr", ethECKey.GetPublicAddressAsBytes());
             var tok = JsonSerializer.Serialize(jsonToken);
             var strToken = tok;
-            //var strToken = "\x19Ethereum Signed Message:\n" + tok.Length + tok;
             tw.WriteLine("token= " + strToken);
             byte[] hashedBytes = DecodeString(new Sha3Keccack().CalculateHash(strToken));
             tw.WriteLine(BitConverter.ToString(hashedBytes));//.Replace("-", ""));
@@ -245,12 +252,6 @@ namespace Eluvio
             var contentReceipt = content.DecodeAllEvents<CreateContentEventDTO>();
 
             return contentReceipt[0].Event.ContentAddress;
-        }
-
-
-        private static string HashString(string input)
-        {
-            return Sha3Keccack.Current.CalculateHash(input);
         }
 
 

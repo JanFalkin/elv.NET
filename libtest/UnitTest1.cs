@@ -34,7 +34,12 @@ namespace libtest
         {
             try
             {
-                BlockchainPrimitives bcp = new("0x4f3e910d1e438582dc520d8bd7c4ca43c92f50ee660b1a090bd8e237b7a102fc", "https://host-76-74-28-235.contentfabric.io/eth/", "0x9b29360efb1169c801bbcbe8e50d0664dcbc78d3", TestContext.Progress);
+                string? pwd = Environment.GetEnvironmentVariable("CHAIN_PASS");
+                if (pwd == null)
+                {
+                    Assert.Fail("Need a password!!");
+                }
+                BlockchainPrimitives bcp = new(pwd, "https://host-76-74-28-235.contentfabric.io/eth/", "0x9b29360efb1169c801bbcbe8e50d0664dcbc78d3", TestContext.Progress);
                 Console.OutputEncoding = System.Text.Encoding.UTF8;
                 Debug.WriteLine(string.Format("MyFunkyKey = {0}", bcp.Key));
                 var spaceID = "66699ab88";
@@ -88,7 +93,12 @@ namespace libtest
         {
             try
             {
-                BlockchainPrimitives bcp = new("0x4f3e910d1e438582dc520d8bd7c4ca43c92f50ee660b1a090bd8e237b7a102fc", "https://host-76-74-28-235.contentfabric.io/eth/", "0x9b29360efb1169c801bbcbe8e50d0664dcbc78d3", TestContext.Progress);
+                string? pwd = Environment.GetEnvironmentVariable("CHAIN_PASS");
+                if (pwd == null)
+                {
+                    Assert.Fail("Need a password!!");
+                }
+                BlockchainPrimitives bcp = new(pwd, "https://host-76-74-28-235.contentfabric.io/eth/", "0x9b29360efb1169c801bbcbe8e50d0664dcbc78d3", TestContext.Progress);
                 Console.OutputEncoding = System.Text.Encoding.UTF8;
                 var ct = bcp.CreateContentType();
                 ct.Wait();
@@ -115,6 +125,7 @@ namespace libtest
                 };
                 var token = bcp.MakeToken("atxsj_", updateJson);
                 TestContext.Progress.WriteLine(" Token = {0} \n content = {1}\n fabid = {2}", token, content.Result, qid);
+                //BlockchainPrimitives.
 
             }
             catch (Exception e)

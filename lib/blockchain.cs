@@ -10,7 +10,6 @@ using System.Text.Json;
 using System.Security.Cryptography;
 using System.Net.Http.Headers;
 using System.Text;
-using Base58Check;
 using SimpleBase;
 using Nethereum.Util;
 using System.Reflection.Metadata.Ecma335;
@@ -150,6 +149,14 @@ namespace Eluvio
             res.Wait();
             return res.Result;
         }
+
+        public Nethereum.RPC.Eth.DTOs.TransactionReceipt AccessRequest(string contractAddress)
+        {
+            BaseContentService cs = new(web3, contractAddress);
+            var res = cs.AccessRequestRequestAndWaitForReceiptAsync(0,"","", new List<Byte[]>(), new List<string>());
+            res.Wait();
+            return res.Result;
+        }        
 
         public static string FabricIdFromBlckchainAdress(string prefix, string bcAdress)
         {

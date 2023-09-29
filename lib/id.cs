@@ -3,7 +3,7 @@ using System.Text;
 using System.Linq;
 using System.Collections.Generic;
 using System.Security.Cryptography;
-using Base58Check;
+using SimpleBase;
 
 
 namespace CommonGo
@@ -147,7 +147,7 @@ namespace CommonGo
                 {
                     return "";
                 }
-                return this.prefix() + Base58Check.Base58CheckEncoding.Encode(this.Bytes());
+                return this.prefix() + Base58.Bitcoin.Encode(this.Bytes());
             }
 
             private string prefix()
@@ -200,7 +200,7 @@ namespace CommonGo
                 byte[] data;
                 try
                 {
-                    data = Base58Check.Base58CheckEncoding.Decode(base58Data);
+                    data = Base58.Bitcoin.Decode(base58Data);
                 }
                 catch
                 {

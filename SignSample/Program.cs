@@ -26,7 +26,7 @@ class Program
         var content = bcp.CreateContent(ct.Result, lib.Result);
         Console.WriteLine("content = {0} QID = {1}", content.Result, BlockchainPrimitives.QIDFromBlockchainAddress(content.Result));
 
-        var res = bcp.UpdateRequest(content.Result);
+        var res = bcp.AccessRequest(content.Result);
         var qid = BlockchainPrimitives.QIDFromBlockchainAddress(content.Result);
         // tw.WriteLine("Public Address: " + ethECKey.GetPublicAddress());
         byte[] txhBytes = Encoding.UTF8.GetBytes(res.TransactionHash[2..]);
@@ -39,6 +39,6 @@ class Program
         Console.WriteLine(" Token = {0} \n content = {1}\n fabid = {2}", token, content.Result, qid);
         var ec = BlockchainPrimitives.CallEditContent(token, libid, qid);
         ec.Wait();
-        Console.WriteLine(String.Format("Edit returns: {0}", ec));
+        Console.WriteLine(String.Format("Edit returns: status {0} result {1}", ec.Status, ec.Result));
     }
 }

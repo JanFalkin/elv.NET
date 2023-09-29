@@ -3,7 +3,7 @@ using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 using CommonGo;
-using Base58Check;
+using SimpleBase;
 using Preamble;
 using NethereumSample.BaseContent.ContractDefinition;
 
@@ -173,7 +173,7 @@ namespace CommonGo.Format
                     b = ConcatArrays(b, Digest);
                 }
 
-                s = $"{TypeToPrefix(Type)}{Base58Check.Base58CheckEncoding.Encode(b)}";
+                s = $"{TypeToPrefix(Type)}{Base58.Bitcoin.Encode(b)}";
             }
 
             return s;

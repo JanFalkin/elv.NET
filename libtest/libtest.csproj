@@ -15,7 +15,6 @@
     <PackageReference Include="coverlet.collector" Version="6.0.0" />
     <PackageReference Include="SimpleBase" Version="4.0.0" />
     <PackageReference Include="System.Diagnostics.TraceSource" Version="4.3.0" />
-    <PackageReference Include="Base58Check" Version="0.2.0" />
   </ItemGroup>
 
   <ItemGroup>

@@ -19,11 +19,11 @@ class Program
         var ct = bcp.CreateContentType();
         ct.Wait();
         Console.WriteLine("content type = {0}", ct.Result);
-        var lib = bcp.CreateLibrary("0x501382E5f15501427D1Fc3d93e949C96b25A2224");
-        lib.Wait();
-        var libid = BlockchainPrimitives.LibFromBlockchainAddress(lib.Result);
-        Console.WriteLine("lib = {0} fab addrs {1}", lib.Result, libid);
-        var content = bcp.CreateContent(ct.Result, lib.Result);
+        // var lib = bcp.CreateLibrary("0x501382E5f15501427D1Fc3d93e949C96b25A2224");
+        // lib.Wait();
+        var libid = BlockchainPrimitives.LibFromBlockchainAddress("0x76d5287501f6d8e3b72AA34545C9cbf951702C74");
+        // Console.WriteLine("lib = {0} fab addrs {1}", lib.Result, libid);
+        var content = bcp.CreateContent(ct.Result, libid);
         Console.WriteLine("content = {0} QID = {1}", content.Result, BlockchainPrimitives.QIDFromBlockchainAddress(content.Result));
 
         var res = bcp.AccessRequest(content.Result);

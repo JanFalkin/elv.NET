@@ -24,6 +24,7 @@ using Elv.NET.Contracts.BaseContentSpace;
 using Nethereum.RPC.Eth.DTOs;
 using Elv.NET.Contracts.BaseContentSpace.ContractDefinition;
 using Nethereum.Contracts;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System.Net.Http.Json;
 using Nethereum.JsonRpc.Client.RpcMessages;
@@ -46,7 +47,33 @@ namespace Eluvio
     {
         readonly static string baseURL = "https://demov3.net955210.contentfabric.io/";
 
-        static async Task<string> CallFunction(string url, string token, JArray metadata)
+        static async Task<string> CallPut(string url, string token, JObject metadata)
+        {
+            HttpClient client = new();
+
+            // Set the authentication token in the request headers
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+            // Create the request content with the metadata
+            HttpContent content = new StringContent(metadata.ToString());
+            content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+
+            // Send the POST request to the specified URL
+
+            HttpResponseMessage response = await client.PutAsync(url, content);
+
+            // Handle the response
+            if (response.IsSuccessStatusCode)
+            {
+                return await response.Content.ReadAsStringAsync();
+            }
+            else
+            {
+                return "";
+            }
+        }
+
+        static async Task<string> CallPost(string url, string token, JObject metadata)
         {
             HttpClient client = new();
 
@@ -75,7 +102,10 @@ namespace Eluvio
         static async Task<string> CallRestApi(string url, string token)
         {
             using HttpClient client = new();
-            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            if (token.IsNotAnEmptyAddress())
+            {
+                client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            }
 
             HttpResponseMessage response = await client.GetAsync(url);
 
@@ -93,27 +123,33 @@ namespace Eluvio
             return "";
         }
 
-        public static async Task<string> CallEditContent(string token, string libid, string qid)
+
+        private string GetBaseURL(string token, string libid, string qid, string format)
         {
-            var url = BlockchainPrimitives.baseURL + String.Format("qlibs/{0}/q/{1}", libid, qid);
-            Console.WriteLine("url = {0} token={1}", url, token);
-            return await CallFunction(url, token, new JArray());
+            var url = currentNode + String.Format(format, libid, qid);
+            Console.WriteLine("'{0}?authorization={1}'", url, token);
+            return url;
+        }
+        public async Task<string> CallEditContent(string token, string libid, string qid)
+        {
+            string url = GetBaseURL(token, libid, qid, "/qlibs/{0}/q/{1}");
+            return await CallPut(url, token, new());
         }
 
-        public static async Task<string> CallGetMetadata(string token, string libid, string qid)
+        public async Task<string> CallGetMetadata(string token, string libid, string qid)
         {
-            var url = BlockchainPrimitives.baseURL + String.Format("qlibs/{0}/q/{1}/meta", libid, qid);
+            string url = GetBaseURL(token, libid, qid, "/qlibs/{0}/q/{1}/meta");
             return await CallRestApi(url, token);
         }
-        public static async Task<string> UpdateMetadata(string token, string libid, string qid, JArray jsonUpdate)
+        public async Task<string> UpdateMetadata(string token, string libid, string qid, JObject jsonUpdate)
         {
-            var url = BlockchainPrimitives.baseURL + String.Format("qlibs/{0}/q/{1}/meta", libid, qid);
-            return await CallFunction(url, token, jsonUpdate);
+            string url = GetBaseURL(token, libid, qid, "/qlibs/{0}/q/{1}/meta");
+            return await CallPut(url, token, jsonUpdate);
         }
-        public static async Task<string> FinalizeContent(string token, string libid, string qwt)
+        public async Task<string> FinalizeContent(string token, string libid, string qwt)
         {
-            var url = BlockchainPrimitives.baseURL + String.Format("qlibs/{0}/q/{1}/meta", libid, qwt);
-            return await CallFunction(url, token, new JArray());
+            string url = GetBaseURL(token, libid, qwt, "/qlibs/{0}/q/{1}");
+            return await CallPost(url, token, new());
         }
 
 
@@ -129,6 +165,10 @@ namespace Eluvio
             string abiFilePath = "/home/jan/ELV/elv.NET/lib/abi/BaseContentSpace.abi"; // Replace with the path to your ABI file
             string abiContent = File.ReadAllText(abiFilePath);
             contract = web3.Eth.GetContract(abiContent, contractAddress);
+            var restResult = CallRestApi(BlockchainPrimitives.baseURL + "config", "");
+            restResult.Wait();
+            JObject jsonObject = JObject.Parse(restResult.Result);
+            currentNode = jsonObject["network"]["seed_nodes"]["fabric_api"][0].ToString();
 
         }
         public BlockchainPrimitives(string url, string contractAddress)
@@ -144,19 +184,31 @@ namespace Eluvio
         }
         public Nethereum.RPC.Eth.DTOs.TransactionReceipt UpdateRequest(string contractAddress)
         {
-            BaseContentService cs = new(web3, contractAddress);
-            var res = cs.UpdateRequestRequestAndWaitForReceiptAsync();
+            var res = contentService.UpdateRequestRequestAndWaitForReceiptAsync();
             res.Wait();
             return res.Result;
         }
 
-        public Nethereum.RPC.Eth.DTOs.TransactionReceipt AccessRequest(string contractAddress)
+        public Nethereum.RPC.Eth.DTOs.TransactionReceipt AccessRequest()
         {
-            BaseContentService cs = new(web3, contractAddress);
-            var res = cs.AccessRequestRequestAndWaitForReceiptAsync(0,"","", new List<Byte[]>(), new List<string>());
+            var res = contentService.AccessRequestRequestAndWaitForReceiptAsync(0, "", "", new List<Byte[]>(), new List<string>());
             res.Wait();
             return res.Result;
-        }        
+        }
+
+        public Nethereum.RPC.Eth.DTOs.TransactionReceipt Commit(BaseContentService commitServ, string hash)
+        {
+            var res = commitServ.CommitRequestAndWaitForReceiptAsync(hash);
+            res.Wait();
+            return res.Result;
+        }
+
+        public string ConfirmCommit()
+        {
+            var hash = contentService.PendingHashQueryAsync();
+            hash.Wait();
+            return hash.Result;
+        }
 
         public static string FabricIdFromBlckchainAdress(string prefix, string bcAdress)
         {
@@ -166,6 +218,38 @@ namespace Eluvio
             }
             return prefix + Base58.Bitcoin.Encode(BlockchainPrimitives.DecodeString(bcAdress));
         }
+
+        public static ulong DecodeUvarint(byte[] data, out int bytesRead)
+        {
+            ulong value = 0;
+            int shift = 0;
+            bytesRead = 0;
+
+            for (int i = 0; i < data.Length; i++)
+            {
+                byte b = data[i];
+                value |= (ulong)(b & 0x7F) << shift;
+                shift += 7;
+                bytesRead++;
+
+                if ((b & 0x80) == 0)
+                {
+                    return value;
+                }
+            }
+
+            throw new ArgumentException("Invalid variable-length encoded integer.");
+        }
+        public static string BlockchainFromFabric(string fabAdress)
+        {
+            fabAdress = fabAdress[4..];
+            var hashBytes = Base58.Bitcoin.Decode(fabAdress);
+            DecodeUvarint(hashBytes[32..], out int bytesRead);
+            var idOffset = 32 + bytesRead;
+            var id = hashBytes[idOffset..];
+            return EncodeBytes(id);
+        }
+
 
         public static string QIDFromBlockchainAddress(string bcAdress)
         {
@@ -181,7 +265,7 @@ namespace Eluvio
         }
 
 
-        private static byte[] DecodeString(string val)
+        public static byte[] DecodeString(string val)
         {
             if (val[0] == '0' && val[1] == 'x')
             {
@@ -193,7 +277,7 @@ namespace Eluvio
                      .ToArray();
         }
 
-        private static string EncodeBytes(byte[] bytes)
+        public static string EncodeBytes(byte[] bytes)
         {
             string hexString = BitConverter.ToString(bytes).Replace("-", "");
             return "0x" + hexString;
@@ -217,7 +301,7 @@ namespace Eluvio
             tw ??= Console.Out;
             var ethECKey = new EthECKey(Key);
             jsonToken.Add("adr", ethECKey.GetPublicAddressAsBytes());
-            var tok = JsonSerializer.Serialize(jsonToken);
+            var tok = System.Text.Json.JsonSerializer.Serialize(jsonToken);
             var strToken = tok;
             tw.WriteLine("token= " + strToken);
             byte[] hashedBytes = DecodeString(new Sha3Keccack().CalculateHash(strToken));
@@ -257,22 +341,23 @@ namespace Eluvio
         {
             var content = await spaceService.CreateContentRequestAndWaitForReceiptAsync(libraryAddress, contentTypeAddress);
             var contentReceipt = content.DecodeAllEvents<CreateContentEventDTO>();
-
             return contentReceipt[0].Event.ContentAddress;
         }
 
 
         public string Key { get; private set; }
         private Nethereum.Web3.Accounts.Account account;
-        private Web3 web3;
+        public Web3 web3;
         private Nethereum.Contracts.ContractHandlers.ContractHandler contractHandler;
-        private BaseContentService contentService;
+        public BaseContentService contentService;
         private BaseLibraryService libService;
 
         private BaseContentSpaceService spaceService;
         private Nethereum.Contracts.Event<Elv.NET.Contracts.BaseContentSpace.ContractDefinition.CreateLibraryEventDTO> cldto;
         private Nethereum.Contracts.Contract contract;
         private TextWriter tw;
+
+        private string currentNode;
 
     }
 

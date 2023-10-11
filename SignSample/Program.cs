@@ -72,8 +72,15 @@ class Program
         Console.WriteLine("hash = {0} dec = {1}", hash, decHash);
         var commitService = new BaseContentService(bcp.web3, decHash);
 
-        var commitReceipt = bcp.Commit(commitService, decHash);
-        Console.WriteLine("commitReceipt status = {0}, {1}", commitReceipt.Status, commitReceipt);
-
+        var commitReceipt = bcp.Commit(commitService, hash);
+        var cpe = commitReceipt.Logs.DecodeAllEvents<Elv.NET.Contracts.BaseContentSpace.ContractDefinition.CommitPendingEventDTO>();
+        if (cpe.Count > 0)
+        {
+            Console.WriteLine("commitReceipt tx hash = {0}, tx idx {1}, hash pending {2}", commitReceipt.TransactionHash, commitReceipt.TransactionIndex, cpe[0].Event.ObjectHash);
+        }
+        else
+        {
+            Console.WriteLine("commitReceipt status = {0}, No Events", commitReceipt.Status);
+        }
     }
 }

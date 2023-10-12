@@ -3,6 +3,8 @@ using NethereumSample.BaseContent;
 using Nethereum.Contracts;
 using Newtonsoft.Json.Linq;
 using McMaster.Extensions.CommandLineUtils;
+using Elv.NET.Contracts.BaseContentSpace;
+
 
 namespace SignSample;
 
@@ -17,7 +19,10 @@ class Program
         // This is Lib Test_Lib
         var libAddress = "0x76d5287501f6d8e3b72AA34545C9cbf951702C74";
         var libid = BlockchainUtils.LibFromBlockchainAddress(libAddress);
-        var content = await bcp.CreateContent(ct, libAddress);
+
+        var spaceService = new BaseContentSpaceService(bcp.web3, bcp.baseContract);
+
+        var content = await BlockchainUtils.CreateContent(spaceService, ct, libAddress);
         Console.WriteLine("content = {0} QID = {1}", content, BlockchainUtils.QIDFromBlockchainAddress(content));
         var newContentService = new BaseContentService(bcp.web3, content);
 
@@ -52,7 +57,7 @@ class Program
         Console.WriteLine("hash = {0} dec = {1}", hash, decHash);
         var commitService = new BaseContentService(bcp.web3, decHash);
 
-        var commitReceipt = bcp.Commit(commitService, hash);
+        var commitReceipt = BlockchainUtils.Commit(commitService, hash);
         var cpe = commitReceipt.Logs.DecodeAllEvents<Elv.NET.Contracts.BaseContentSpace.ContractDefinition.CommitPendingEventDTO>();
         if (cpe.Count > 0)
         {

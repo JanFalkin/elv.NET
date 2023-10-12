@@ -205,6 +205,46 @@ namespace Eluvio
             return decoded;
         }
 
+        public static async Task<string> CreateContentType(BaseContentSpaceService spaceService)
+        {
+            var ct = await spaceService.CreateContentTypeRequestAndWaitForReceiptAsync();
+            var cctReceipt = ct.DecodeAllEvents<CreateContentTypeEventDTO>();
+            return cctReceipt[0].Event.ContentTypeAddress;
+        }
+
+        public static async Task<string> CreateLibrary(BaseContentSpaceService spaceService, string space)
+        {
+            // should be using space "0x501382E5f15501427D1Fc3d93e949C96b25A2224"
+            var lib = await spaceService.CreateLibraryRequestAndWaitForReceiptAsync(space);
+            var libReceipt = lib.DecodeAllEvents<CreateLibraryEventDTO>();
+            return libReceipt[0].Event.LibraryAddress;
+        }
+
+        public static async Task<string> CreateContent(BaseContentSpaceService spaceService, string contentTypeAddress, string libraryAddress)
+        {
+            var content = await spaceService.CreateContentRequestAndWaitForReceiptAsync(libraryAddress, contentTypeAddress);
+            var contentReceipt = content.DecodeAllEvents<CreateContentEventDTO>();
+            return contentReceipt[0].Event.ContentAddress;
+        }
+        public static Nethereum.RPC.Eth.DTOs.TransactionReceipt UpdateRequest(BaseContentService contentService, string contractAddress)
+        {
+            var res = contentService.UpdateRequestRequestAndWaitForReceiptAsync();
+            res.Wait();
+            return res.Result;
+        }
+
+        public static Nethereum.RPC.Eth.DTOs.TransactionReceipt AccessRequest(BaseContentService contentService)
+        {
+            var res = contentService.AccessRequestRequestAndWaitForReceiptAsync(0, "", "", new List<Byte[]>(), new List<string>());
+            res.Wait();
+            return res.Result;
+        }
+        public static Nethereum.RPC.Eth.DTOs.TransactionReceipt Commit(BaseContentService commitServ, string hash)
+        {
+            var res = commitServ.CommitRequestAndWaitForReceiptAsync(hash);
+            res.Wait();
+            return res.Result;
+        }
 
     }
 
@@ -215,8 +255,9 @@ namespace Eluvio
         {
             account = new Nethereum.Web3.Accounts.Account(this.Key);
             web3 = new Web3(this.account, url);
-            contentService = new BaseContentService(web3, contractAddress);
-            spaceService = new BaseContentSpaceService(web3, contractAddress);
+            baseContract = contractAddress;
+            // contentService = new BaseContentService(web3, contractAddress);
+            // spaceService = new BaseContentSpaceService(web3, contractAddress);
 
         }
         public BlockchainPrimitives(string url, string contractAddress) : base()
@@ -229,26 +270,8 @@ namespace Eluvio
             Key = key;
             CommonConstruct(url, contractAddress);
         }
-        public Nethereum.RPC.Eth.DTOs.TransactionReceipt UpdateRequest(string contractAddress)
-        {
-            var res = contentService.UpdateRequestRequestAndWaitForReceiptAsync();
-            res.Wait();
-            return res.Result;
-        }
 
-        public Nethereum.RPC.Eth.DTOs.TransactionReceipt AccessRequest()
-        {
-            var res = contentService.AccessRequestRequestAndWaitForReceiptAsync(0, "", "", new List<Byte[]>(), new List<string>());
-            res.Wait();
-            return res.Result;
-        }
 
-        public Nethereum.RPC.Eth.DTOs.TransactionReceipt Commit(BaseContentService commitServ, string hash)
-        {
-            var res = commitServ.CommitRequestAndWaitForReceiptAsync(hash);
-            res.Wait();
-            return res.Result;
-        }
 
         public string MakeToken(string prefix, Dictionary<string, object> jsonToken)
         {
@@ -272,34 +295,10 @@ namespace Eluvio
 
         }
 
-        public async Task<string> CreateContentType()
-        {
-            var ct = await spaceService.CreateContentTypeRequestAndWaitForReceiptAsync();
-            var cctReceipt = ct.DecodeAllEvents<CreateContentTypeEventDTO>();
-            return cctReceipt[0].Event.ContentTypeAddress;
-        }
-
-        public async Task<string> CreateLibrary(string space)
-        {
-            // should be using space "0x501382E5f15501427D1Fc3d93e949C96b25A2224"
-            var lib = await spaceService.CreateLibraryRequestAndWaitForReceiptAsync(space);
-            var libReceipt = lib.DecodeAllEvents<CreateLibraryEventDTO>();
-            return libReceipt[0].Event.LibraryAddress;
-        }
-
-        public async Task<string> CreateContent(string contentTypeAddress, string libraryAddress)
-        {
-            var content = await spaceService.CreateContentRequestAndWaitForReceiptAsync(libraryAddress, contentTypeAddress);
-            var contentReceipt = content.DecodeAllEvents<CreateContentEventDTO>();
-            return contentReceipt[0].Event.ContentAddress;
-        }
-
-
         public string Key { get; private set; }
-        private Nethereum.Web3.Accounts.Account account;
+        public Nethereum.Web3.Accounts.Account account;
         public Web3 web3;
-        public BaseContentService contentService;
-        private BaseContentSpaceService spaceService;
+        public string baseContract;
 
     }
 

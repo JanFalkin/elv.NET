@@ -1,11 +1,12 @@
 using Eluvio;
-using Nethereum.ABI.Util;
-using Nethereum.Hex.HexConvertors.Extensions;
-using Nethereum.Util;
-using NethereumSample.BaseContent.ContractDefinition;
 using System.Diagnostics;
-using SimpleBase;
+using Newtonsoft.Json.Linq;
+using Elv.NET.Contracts.BaseContentSpace;
+using NethereumSample.BaseContent;
+using Nethereum.Contracts;
+using System.Globalization;
 using System.Text;
+using Nethereum.ABI.Util;
 
 namespace libtest
 {
@@ -88,6 +89,25 @@ namespace libtest
             //
         }
 
+        static string MakeUpper(string s)
+        {
+            StringBuilder result = new();
+            CultureInfo culture = CultureInfo.InvariantCulture;
+
+            foreach (char c in s)
+            {
+                if (char.IsLetter(c))
+                {
+                    result.Append(char.ToUpper(c, culture));
+                }
+                else
+                {
+                    result.Append(c);
+                }
+            }
+            return result.ToString();
+        }
+
         [Test]
         public void TestContent()
         {
@@ -100,31 +120,71 @@ namespace libtest
                 }
                 BlockchainPrimitives bcp = new(pwd, "https://host-76-74-28-235.contentfabric.io/eth/", "0x9b29360efb1169c801bbcbe8e50d0664dcbc78d3");
                 Console.OutputEncoding = System.Text.Encoding.UTF8;
-                var ct = bcp.CreateContentType();
-                ct.Wait();
-                TestContext.Progress.WriteLine("content type = {0}", ct.Result);
-                var lib = bcp.CreateLibrary("0x501382E5f15501427D1Fc3d93e949C96b25A2224");
-                lib.Wait();
-                TestContext.Progress.WriteLine("lib = {0} fab addrs {1}", lib.Result, BlockchainUtils.LibFromBlockchainAddress(lib.Result));
-                var content = bcp.CreateContent(ct.Result, lib.Result);
+                var spaceService = new BaseContentSpaceService(bcp.web3, bcp.baseContract);
+
+                var ct = "0x0a5bc8d97be691970df876534a3433901fafe5d9";
+                TestContext.Progress.WriteLine("content type = {0}", ct);
+                var libAddress = "0x76d5287501f6d8e3b72AA34545C9cbf951702C74";
+                var libid = BlockchainUtils.LibFromBlockchainAddress(libAddress);
+                var content = BlockchainUtils.CreateContent(spaceService, ct, libAddress);
+                content.Wait();
                 TestContext.Progress.WriteLine("content = {0} QID = {1}", content.Result, BlockchainUtils.QIDFromBlockchainAddress(content.Result));
                 Assert.Multiple(() =>
                 {
                     Assert.That(content.IsCompletedSuccessfully);
                     Assert.That(content.Result, Is.Not.EqualTo(""));
                 });
-
-                var res = bcp.UpdateRequest(content.Result);
+                var newContentService = new BaseContentService(bcp.web3, content.Result);
+                var res = newContentService.UpdateRequestRequestAndWaitForReceiptAsync();
+                res.Wait();
                 var qid = BlockchainUtils.QIDFromBlockchainAddress(content.Result);
-                // tw.WriteLine("Public Address: " + ethECKey.GetPublicAddress());
-                byte[] txhBytes = Encoding.UTF8.GetBytes(res.TransactionHash[2..]);
+                Console.WriteLine(String.Format("transaction hash = {0}", res.Result.TransactionHash));
+                byte[] txhBytes = BlockchainUtils.DecodeString(res.Result.TransactionHash);
                 Dictionary<string, object> updateJson = new()
                 {
-                    { "spc", BlockchainUtils.SpaceFromBlockchainAddress("0x501382E5f15501427D1Fc3d93e949C96b25A2224") },
+                    { "spc", BlockchainUtils.SpaceFromBlockchainAddress("0x9b29360efb1169c801bbcbe8e50d0664dcbc78d3") },
                     { "txh", Convert.ToBase64String(txhBytes) }
                 };
                 var token = bcp.MakeToken("atxsj_", updateJson);
-                TestContext.Progress.WriteLine(" Token = {0} \n content = {1}\n fabid = {2}", token, content.Result, qid);
+                Console.WriteLine(" Token = {0} \n content = {1}\n fabid = {2}", token, content, qid);
+                var ec = bcp.CallEditContent(token, libid, qid);
+                ec.Wait();
+                Console.WriteLine(String.Format("Edit returns: content {0}", ec));
+                JObject ecValues = JObject.Parse(ec.Result);
+                Assert.That(ecValues, Is.Not.Null);
+                Assert.That(ecValues["write_token"], Is.Not.Null);
+                var qwt = ecValues["write_token"].ToString();
+                Assert.That(qwt, Is.Not.Empty);
+                Console.WriteLine("write_token = {0}", qwt);
+                string newMeta = "{\"key1\":{\"subkey1\":[\"value1\", \"value2\", \"value3\"]}}";
+
+                var um = bcp.UpdateMetadata(token, libid, qwt, JObject.Parse(newMeta));
+                um.Wait();
+
+                var fin = bcp.FinalizeContent(token, libid, qwt);
+                fin.Wait();
+                Console.WriteLine("finalized output = {0}", fin);
+                JObject finVals = JObject.Parse(fin.Result);
+                Assert.That(finVals, Is.Not.Null);
+                Assert.That(finVals["hash"], Is.Not.Null);
+                var hash = finVals["hash"].ToString();
+
+                var decHash = BlockchainUtils.BlockchainFromFabric(hash);
+                Assert.That(decHash[2..], Is.EqualTo(MakeUpper(content.Result[2..])));
+                // decHash == content
+                Console.WriteLine("hash = {0} dec = {1}", hash, decHash);
+                var commitService = new BaseContentService(bcp.web3, decHash);
+
+                var commitReceipt = BlockchainUtils.Commit(commitService, hash);
+                var cpe = commitReceipt.Logs.DecodeAllEvents<Elv.NET.Contracts.BaseContentSpace.ContractDefinition.CommitPendingEventDTO>();
+                if (cpe.Count > 0)
+                {
+                    Console.WriteLine("commitReceipt tx hash = {0}, tx idx {1}, hash pending {2}", commitReceipt.TransactionHash, commitReceipt.TransactionIndex, cpe[0].Event.ObjectHash);
+                }
+                else
+                {
+                    Console.WriteLine("commitReceipt status = {0}, No Events", commitReceipt.Status);
+                }
                 //BlockchainPrimitives.
 
             }

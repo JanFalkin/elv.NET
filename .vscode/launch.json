@@ -7,7 +7,12 @@
             "request": "launch",
             "preLaunchTask": "build",
             "program": "${workspaceFolder}/SignSample/bin/Debug/net6.0/SignSample.dll",
-            "args": [],
+            "args": [
+                "-e",
+                "https://host-76-74-28-235.contentfabric.io/eth/",
+                "-c",
+                "0x9b29360efb1169c801bbcbe8e50d0664dcbc78d3"
+            ],
             "cwd": "${workspaceFolder}/SignSample",
             "stopAtEntry": false,
             "console": "internalConsole"

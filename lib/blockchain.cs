@@ -1,79 +1,31 @@
 ﻿using Nethereum.Web3;
-using Nethereum.Web3.Accounts;
 using NethereumSample.BaseContent;
-using Nethereum.KeyStore;
-using Nethereum.KeyStore.Crypto;
 using Nethereum.Signer;
 using Nethereum.Hex.HexConvertors.Extensions;
-using Org.BouncyCastle.Crypto.Prng;
-using System.Text.Json;
-using System.Security.Cryptography;
 using System.Net.Http.Headers;
 using System.Text;
 using SimpleBase;
 using Nethereum.Util;
-using System.Reflection.Metadata.Ecma335;
 using Nethereum.Model;
-using Nethereum.ABI.Util;
-using Nethereum.RLP;
-using Nethereum.Contracts.TransactionHandlers;
 using ADRaffy.ENSNormalize;
-using Nethereum.Hex.HexTypes;
-using Elv.NET.Contracts.BaseLibrary;
 using Elv.NET.Contracts.BaseContentSpace;
-using Nethereum.RPC.Eth.DTOs;
 using Elv.NET.Contracts.BaseContentSpace.ContractDefinition;
 using Nethereum.Contracts;
-using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using System.Net.Http.Json;
-using Nethereum.JsonRpc.Client.RpcMessages;
 
 
 namespace Eluvio
 {
-    public interface IBlockchainPrimitives
+    public class HttpHelper
     {
-        string Key { get; }
-
-        Task<string> CreateContent(string contentTypeAddress, string libraryAddress);
-        Task<string> CreateContentType();
-        Task<string> CreateLibrary(string space);
-        string MakeToken(string prefix, Dictionary<string, object> jsonToken);
-        TransactionReceipt UpdateRequest(string contractAddress);
-    }
-
-    public class BlockchainPrimitives : IBlockchainPrimitives
-    {
-        readonly static string baseURL = "https://demov3.net955210.contentfabric.io/";
-
-        static async Task<string> CallPut(string url, string token, JObject metadata)
+        public HttpHelper()
         {
-            HttpClient client = new();
-
-            // Set the authentication token in the request headers
-            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
-
-            // Create the request content with the metadata
-            HttpContent content = new StringContent(metadata.ToString());
-            content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
-
-            // Send the POST request to the specified URL
-
-            HttpResponseMessage response = await client.PutAsync(url, content);
-
-            // Handle the response
-            if (response.IsSuccessStatusCode)
-            {
-                return await response.Content.ReadAsStringAsync();
-            }
-            else
-            {
-                return "";
-            }
+            var restResult = CallRestApi(BlockchainPrimitives.baseURL + "config", "");
+            restResult.Wait();
+            JObject jsonObject = JObject.Parse(restResult.Result);
+            currentNode = jsonObject["network"]["seed_nodes"]["fabric_api"][0].ToString();
         }
-
-        static async Task<string> CallPost(string url, string token, JObject metadata)
+        public static async Task<string> CallPost(string url, string token, JObject metadata)
         {
             HttpClient client = new();
 
@@ -99,7 +51,33 @@ namespace Eluvio
             }
         }
 
-        static async Task<string> CallRestApi(string url, string token)
+        public static async Task<string> CallPut(string url, string token, JObject metadata)
+        {
+            HttpClient client = new();
+
+            // Set the authentication token in the request headers
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+            // Create the request content with the metadata
+            HttpContent content = new StringContent(metadata.ToString());
+            content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+
+            // Send the POST request to the specified URL
+
+            HttpResponseMessage response = await client.PutAsync(url, content);
+
+            // Handle the response
+            if (response.IsSuccessStatusCode)
+            {
+                return await response.Content.ReadAsStringAsync();
+            }
+            else
+            {
+                return "";
+            }
+        }
+
+        public static async Task<string> CallRestApi(string url, string token)
         {
             using HttpClient client = new();
             if (token.IsNotAnEmptyAddress())
@@ -122,7 +100,7 @@ namespace Eluvio
             }
             return "";
         }
-
+        readonly static string baseURL = "https://demov3.net955210.contentfabric.io/";
 
         private string GetBaseURL(string token, string libid, string qid, string format)
         {
@@ -152,71 +130,20 @@ namespace Eluvio
             return await CallPost(url, token, new());
         }
 
+        private readonly string currentNode;
 
-        private void CommonConstruct(string url, string contractAddress)
-        {
-            account = new Nethereum.Web3.Accounts.Account(this.Key);
-            web3 = new Web3(this.account, url);
-            contractHandler = web3.Eth.GetContractHandler(contractAddress);
-            cldto = contractHandler.GetEvent<Elv.NET.Contracts.BaseContentSpace.ContractDefinition.CreateLibraryEventDTO>();
-            contentService = new BaseContentService(web3, contractAddress);
-            libService = new BaseLibraryService(web3, contractAddress);
-            spaceService = new BaseContentSpaceService(web3, contractAddress);
-            string abiFilePath = "/home/jan/ELV/elv.NET/lib/abi/BaseContentSpace.abi"; // Replace with the path to your ABI file
-            string abiContent = File.ReadAllText(abiFilePath);
-            contract = web3.Eth.GetContract(abiContent, contractAddress);
-            var restResult = CallRestApi(BlockchainPrimitives.baseURL + "config", "");
-            restResult.Wait();
-            JObject jsonObject = JObject.Parse(restResult.Result);
-            currentNode = jsonObject["network"]["seed_nodes"]["fabric_api"][0].ToString();
 
-        }
-        public BlockchainPrimitives(string url, string contractAddress)
-        {
-            Key = EthECKey.GenerateKey().GetPrivateKeyAsBytes().ToHex();
-            CommonConstruct(url, contractAddress);
-        }
-        public BlockchainPrimitives(string key, string url, string contractAddress, TextWriter tw = null)
-        {
-            Key = key;
-            CommonConstruct(url, contractAddress);
-            this.tw = tw;
-        }
-        public Nethereum.RPC.Eth.DTOs.TransactionReceipt UpdateRequest(string contractAddress)
-        {
-            var res = contentService.UpdateRequestRequestAndWaitForReceiptAsync();
-            res.Wait();
-            return res.Result;
-        }
+    }
 
-        public Nethereum.RPC.Eth.DTOs.TransactionReceipt AccessRequest()
-        {
-            var res = contentService.AccessRequestRequestAndWaitForReceiptAsync(0, "", "", new List<Byte[]>(), new List<string>());
-            res.Wait();
-            return res.Result;
-        }
-
-        public Nethereum.RPC.Eth.DTOs.TransactionReceipt Commit(BaseContentService commitServ, string hash)
-        {
-            var res = commitServ.CommitRequestAndWaitForReceiptAsync(hash);
-            res.Wait();
-            return res.Result;
-        }
-
-        public string ConfirmCommit()
-        {
-            var hash = contentService.PendingHashQueryAsync();
-            hash.Wait();
-            return hash.Result;
-        }
-
+    public class BlockchainUtils
+    {
         public static string FabricIdFromBlckchainAdress(string prefix, string bcAdress)
         {
             if (bcAdress[..2] == "0x")
             {
                 bcAdress = bcAdress[2..];
             }
-            return prefix + Base58.Bitcoin.Encode(BlockchainPrimitives.DecodeString(bcAdress));
+            return prefix + Base58.Bitcoin.Encode(DecodeString(bcAdress));
         }
 
         public static ulong DecodeUvarint(byte[] data, out int bytesRead)
@@ -283,7 +210,7 @@ namespace Eluvio
             return "0x" + hexString;
         }
 
-        private static byte[] SignMessage(EthECKey key, byte[] hashedBytes)
+        public static byte[] SignMessage(EthECKey key, byte[] hashedBytes)
         {
             var signer = new EthereumMessageSigner();
             var ethECDSASignature = signer.SignAndCalculateV(hashedBytes, key);
@@ -292,31 +219,75 @@ namespace Eluvio
             return decoded;
         }
 
-        // private static bool Verify(byte[] signature, )
-        // {
 
-        // }
+    }
+
+    public class BlockchainPrimitives : HttpHelper
+    {
+
+        private void CommonConstruct(string url, string contractAddress)
+        {
+            account = new Nethereum.Web3.Accounts.Account(this.Key);
+            web3 = new Web3(this.account, url);
+            contentService = new BaseContentService(web3, contractAddress);
+            spaceService = new BaseContentSpaceService(web3, contractAddress);
+
+        }
+        public BlockchainPrimitives(string url, string contractAddress) : base()
+        {
+            Key = EthECKey.GenerateKey().GetPrivateKeyAsBytes().ToHex();
+            CommonConstruct(url, contractAddress);
+        }
+        public BlockchainPrimitives(string key, string url, string contractAddress) : base()
+        {
+            Key = key;
+            CommonConstruct(url, contractAddress);
+        }
+        public Nethereum.RPC.Eth.DTOs.TransactionReceipt UpdateRequest(string contractAddress)
+        {
+            var res = contentService.UpdateRequestRequestAndWaitForReceiptAsync();
+            res.Wait();
+            return res.Result;
+        }
+
+        public Nethereum.RPC.Eth.DTOs.TransactionReceipt AccessRequest()
+        {
+            var res = contentService.AccessRequestRequestAndWaitForReceiptAsync(0, "", "", new List<Byte[]>(), new List<string>());
+            res.Wait();
+            return res.Result;
+        }
+
+        public Nethereum.RPC.Eth.DTOs.TransactionReceipt Commit(BaseContentService commitServ, string hash)
+        {
+            var res = commitServ.CommitRequestAndWaitForReceiptAsync(hash);
+            res.Wait();
+            return res.Result;
+        }
+
+        public string ConfirmCommit()
+        {
+            var hash = contentService.PendingHashQueryAsync();
+            hash.Wait();
+            return hash.Result;
+        }
+
         public string MakeToken(string prefix, Dictionary<string, object> jsonToken)
         {
-            tw ??= Console.Out;
             var ethECKey = new EthECKey(Key);
             jsonToken.Add("adr", ethECKey.GetPublicAddressAsBytes());
             var tok = System.Text.Json.JsonSerializer.Serialize(jsonToken);
             var strToken = tok;
-            tw.WriteLine("token= " + strToken);
-            byte[] hashedBytes = DecodeString(new Sha3Keccack().CalculateHash(strToken));
-            tw.WriteLine(BitConverter.ToString(hashedBytes));//.Replace("-", ""));
+            byte[] hashedBytes = BlockchainUtils.DecodeString(new Sha3Keccack().CalculateHash(strToken));
 
             byte[] signature = Array.Empty<byte>();
             if (prefix[3] == 's')
             {
-                signature = SignMessage(ethECKey, hashedBytes);
+                signature = BlockchainUtils.SignMessage(ethECKey, hashedBytes);
             }
             // // Signing
             byte[] concat = signature.Concat(Encoding.UTF8.GetBytes(strToken)).ToArray();
 
             string signatureString = prefix + Base58.Bitcoin.Encode(concat);
-            tw.WriteLine("Signature: " + signatureString);
 
             return signatureString;
 
@@ -348,58 +319,9 @@ namespace Eluvio
         public string Key { get; private set; }
         private Nethereum.Web3.Accounts.Account account;
         public Web3 web3;
-        private Nethereum.Contracts.ContractHandlers.ContractHandler contractHandler;
         public BaseContentService contentService;
-        private BaseLibraryService libService;
-
         private BaseContentSpaceService spaceService;
-        private Nethereum.Contracts.Event<Elv.NET.Contracts.BaseContentSpace.ContractDefinition.CreateLibraryEventDTO> cldto;
-        private Nethereum.Contracts.Contract contract;
-        private TextWriter tw;
 
-        private string currentNode;
-
-    }
-
-
-    public class BlockchainOperations
-    {
-        void CreateContentObject()
-        {
-
-        }
-        void DeleteContentObject()
-        {
-
-        }
-        void AccessRequest(string library_id, string object_id, bool update = true)
-        {
-
-        }
-        void CommitVersion(string library_id, string object_id, string version_hash)
-        {
-
-        }
-    }
-
-    public class Tokens
-    {
-        void CreateUpdateTxToken()
-        {
-
-        }
-        void CreateAccessTxToken()
-        {
-
-        }
-        void CreateCliengSignedAccessToken()
-        {
-
-        }
-        void CreateEditorSignedAccessToken()
-        {
-
-        }
     }
 
 }

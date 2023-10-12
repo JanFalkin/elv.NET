@@ -39,7 +39,7 @@ namespace libtest
                 {
                     Assert.Fail("Need a password!!");
                 }
-                BlockchainPrimitives bcp = new(pwd, "https://host-76-74-28-235.contentfabric.io/eth/", "0x9b29360efb1169c801bbcbe8e50d0664dcbc78d3", TestContext.Progress);
+                BlockchainPrimitives bcp = new(pwd, "https://host-76-74-28-235.contentfabric.io/eth/", "0x9b29360efb1169c801bbcbe8e50d0664dcbc78d3");
                 Console.OutputEncoding = System.Text.Encoding.UTF8;
                 Debug.WriteLine(string.Format("MyFunkyKey = {0}", bcp.Key));
                 var spaceID = "66699ab88";
@@ -98,16 +98,16 @@ namespace libtest
                 {
                     Assert.Fail("Need a password!!");
                 }
-                BlockchainPrimitives bcp = new(pwd, "https://host-76-74-28-235.contentfabric.io/eth/", "0x9b29360efb1169c801bbcbe8e50d0664dcbc78d3", TestContext.Progress);
+                BlockchainPrimitives bcp = new(pwd, "https://host-76-74-28-235.contentfabric.io/eth/", "0x9b29360efb1169c801bbcbe8e50d0664dcbc78d3");
                 Console.OutputEncoding = System.Text.Encoding.UTF8;
                 var ct = bcp.CreateContentType();
                 ct.Wait();
                 TestContext.Progress.WriteLine("content type = {0}", ct.Result);
                 var lib = bcp.CreateLibrary("0x501382E5f15501427D1Fc3d93e949C96b25A2224");
                 lib.Wait();
-                TestContext.Progress.WriteLine("lib = {0} fab addrs {1}", lib.Result, BlockchainPrimitives.LibFromBlockchainAddress(lib.Result));
+                TestContext.Progress.WriteLine("lib = {0} fab addrs {1}", lib.Result, BlockchainUtils.LibFromBlockchainAddress(lib.Result));
                 var content = bcp.CreateContent(ct.Result, lib.Result);
-                TestContext.Progress.WriteLine("content = {0} QID = {1}", content.Result, BlockchainPrimitives.QIDFromBlockchainAddress(content.Result));
+                TestContext.Progress.WriteLine("content = {0} QID = {1}", content.Result, BlockchainUtils.QIDFromBlockchainAddress(content.Result));
                 Assert.Multiple(() =>
                 {
                     Assert.That(content.IsCompletedSuccessfully);
@@ -115,12 +115,12 @@ namespace libtest
                 });
 
                 var res = bcp.UpdateRequest(content.Result);
-                var qid = BlockchainPrimitives.QIDFromBlockchainAddress(content.Result);
+                var qid = BlockchainUtils.QIDFromBlockchainAddress(content.Result);
                 // tw.WriteLine("Public Address: " + ethECKey.GetPublicAddress());
                 byte[] txhBytes = Encoding.UTF8.GetBytes(res.TransactionHash[2..]);
                 Dictionary<string, object> updateJson = new()
                 {
-                    { "spc", BlockchainPrimitives.SpaceFromBlockchainAddress("0x501382E5f15501427D1Fc3d93e949C96b25A2224") },
+                    { "spc", BlockchainUtils.SpaceFromBlockchainAddress("0x501382E5f15501427D1Fc3d93e949C96b25A2224") },
                     { "txh", Convert.ToBase64String(txhBytes) }
                 };
                 var token = bcp.MakeToken("atxsj_", updateJson);

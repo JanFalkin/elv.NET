@@ -18,27 +18,32 @@ namespace Eluvio
 {
     public class HttpHelper
     {
+        delegate Task<HttpResponseMessage> PostCallDelegate(HttpClient client, string url, string token, HttpContent content);
         public HttpHelper()
         {
-            var restResult = CallRestApi(BlockchainPrimitives.baseURL + "config", "");
+            client = new();
+            var restResult = CallRestApi(client, BlockchainPrimitives.baseURL + "config", "");
             restResult.Wait();
             JObject jsonObject = JObject.Parse(restResult.Result);
             currentNode = jsonObject["network"]["seed_nodes"]["fabric_api"][0].ToString();
         }
-        public static async Task<string> CallPost(string url, string token, JObject metadata)
+        private static async Task<string> CallHttp(HttpClient client, string url, string token, HttpContent content, JObject metadata, Delegate delCall)
         {
-            HttpClient client = new();
-
             // Set the authentication token in the request headers
             client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
+
             // Create the request content with the metadata
-            HttpContent content = new StringContent(metadata.ToString());
-            content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+            if (metadata != null)
+            {
+                content = new StringContent(metadata.ToString());
+                content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+
+            }
 
             // Send the POST request to the specified URL
 
-            HttpResponseMessage response = await client.PostAsync(url, content);
+            HttpResponseMessage response = await (Task<HttpResponseMessage>)delCall.DynamicInvoke(client, url, token, content);
 
             // Handle the response
             if (response.IsSuccessStatusCode)
@@ -50,55 +55,35 @@ namespace Eluvio
                 return "";
             }
         }
-
-        public static async Task<string> CallPut(string url, string token, JObject metadata)
+        public static async Task<string> CallPost(HttpClient client, string url, string token, HttpContent content, JObject metadata)
         {
-            HttpClient client = new();
-
-            // Set the authentication token in the request headers
-            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
-
-            // Create the request content with the metadata
-            HttpContent content = new StringContent(metadata.ToString());
-            content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
-
-            // Send the POST request to the specified URL
-
-            HttpResponseMessage response = await client.PutAsync(url, content);
-
-            // Handle the response
-            if (response.IsSuccessStatusCode)
+            PostCallDelegate postDelegate = async (HttpClient client, string url, string token, HttpContent content) =>
             {
-                return await response.Content.ReadAsStringAsync();
-            }
-            else
-            {
-                return "";
-            }
+                HttpResponseMessage response = await client.PostAsync(url, content);
+                return response;
+            };
+            return await CallHttp(client, url, token, content, metadata, postDelegate);
+
         }
 
-        public static async Task<string> CallRestApi(string url, string token)
+        public static async Task<string> CallPut(HttpClient client, string url, string token, HttpContent content, JObject metadata)
         {
-            using HttpClient client = new();
-            if (token.IsNotAnEmptyAddress())
+            PostCallDelegate putDelegate = async (HttpClient client, string url, string token, HttpContent content) =>
             {
-                client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
-            }
+                HttpResponseMessage response = await client.PutAsync(url, content);
+                return response;
+            };
+            return await CallHttp(client, url, token, content, metadata, putDelegate);
+        }
 
-            HttpResponseMessage response = await client.GetAsync(url);
-
-            if (response.IsSuccessStatusCode)
+        public static async Task<string> CallRestApi(HttpClient client, string url, string token)
+        {
+            PostCallDelegate getDelegate = async (HttpClient client, string url, string token, HttpContent content) =>
             {
-                string responseBody = await response.Content.ReadAsStringAsync();
-                // Process the response data as needed
-                Console.WriteLine(responseBody);
-                return responseBody;
-            }
-            else
-            {
-                Console.WriteLine("API request failed with status code: " + response.StatusCode);
-            }
-            return "";
+                HttpResponseMessage response = await client.GetAsync(url);
+                return response;
+            };
+            return await CallHttp(client, url, token, null, null, getDelegate);
         }
         readonly static string baseURL = "https://demov3.net955210.contentfabric.io/";
 
@@ -111,26 +96,27 @@ namespace Eluvio
         public async Task<string> CallEditContent(string token, string libid, string qid)
         {
             string url = GetBaseURL(token, libid, qid, "/qlibs/{0}/q/{1}");
-            return await CallPut(url, token, new());
+            return await CallPut(client, url, token, null, new());
         }
 
         public async Task<string> CallGetMetadata(string token, string libid, string qid)
         {
             string url = GetBaseURL(token, libid, qid, "/qlibs/{0}/q/{1}/meta");
-            return await CallRestApi(url, token);
+            return await CallRestApi(client, url, token);
         }
         public async Task<string> UpdateMetadata(string token, string libid, string qid, JObject jsonUpdate)
         {
             string url = GetBaseURL(token, libid, qid, "/qlibs/{0}/q/{1}/meta");
-            return await CallPut(url, token, jsonUpdate);
+            return await CallPut(client, url, token, null, jsonUpdate);
         }
         public async Task<string> FinalizeContent(string token, string libid, string qwt)
         {
             string url = GetBaseURL(token, libid, qwt, "/qlibs/{0}/q/{1}");
-            return await CallPost(url, token, new());
+            return await CallPost(client, url, token, null, new());
         }
 
         private readonly string currentNode;
+        private readonly HttpClient client;
 
 
     }
@@ -262,13 +248,6 @@ namespace Eluvio
             var res = commitServ.CommitRequestAndWaitForReceiptAsync(hash);
             res.Wait();
             return res.Result;
-        }
-
-        public string ConfirmCommit()
-        {
-            var hash = contentService.PendingHashQueryAsync();
-            hash.Wait();
-            return hash.Result;
         }
 
         public string MakeToken(string prefix, Dictionary<string, object> jsonToken)

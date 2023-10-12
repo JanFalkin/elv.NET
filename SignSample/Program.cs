@@ -11,11 +11,12 @@ class Program
     static async Task<bool> DoSampleAsync(BlockchainPrimitives bcp)
     {
         Console.OutputEncoding = System.Text.Encoding.UTF8;
+        // This is content type 'ABR Master'
         var ct = "0x0a5bc8d97be691970df876534a3433901fafe5d9";
         Console.WriteLine("content type = {0}", ct);
+        // This is Lib Test_Lib
         var libAddress = "0x76d5287501f6d8e3b72AA34545C9cbf951702C74";
         var libid = BlockchainUtils.LibFromBlockchainAddress(libAddress);
-        // Console.WriteLine("lib = {0} fab addrs {1}", lib.Result, libid);
         var content = await bcp.CreateContent(ct, libAddress);
         Console.WriteLine("content = {0} QID = {1}", content, BlockchainUtils.QIDFromBlockchainAddress(content));
         var newContentService = new BaseContentService(bcp.web3, content);
@@ -23,7 +24,6 @@ class Program
 
         var res = await newContentService.UpdateRequestRequestAndWaitForReceiptAsync();
         var qid = BlockchainUtils.QIDFromBlockchainAddress(content);
-        // tw.WriteLine("Public Address: " + ethECKey.GetPublicAddress());
         Console.WriteLine(String.Format("transaction hash = {0}", res.TransactionHash));
         byte[] txhBytes = BlockchainUtils.DecodeString(res.TransactionHash);
         Dictionary<string, object> updateJson = new()
@@ -40,7 +40,7 @@ class Program
         Console.WriteLine("write_token = {0}", qwt);
         string newMeta = "{\"key1\":{\"subkey1\":[\"value1\", \"value2\", \"value3\"]}}";
 
-        var um = await bcp.UpdateMetadata(token, libid, qwt, JObject.Parse(newMeta));
+        await bcp.UpdateMetadata(token, libid, qwt, JObject.Parse(newMeta));
 
         var fin = await bcp.FinalizeContent(token, libid, qwt);
         Console.WriteLine("finalized output = {0}", fin);
@@ -48,6 +48,7 @@ class Program
         var hash = finVals["hash"].ToString();
 
         var decHash = BlockchainUtils.BlockchainFromFabric(hash);
+        // decHash == content
         Console.WriteLine("hash = {0} dec = {1}", hash, decHash);
         var commitService = new BaseContentService(bcp.web3, decHash);
 

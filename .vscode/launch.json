@@ -8,8 +8,6 @@
             "preLaunchTask": "build",
             "program": "${workspaceFolder}/SignSample/bin/Debug/net6.0/SignSample.dll",
             "args": [
-                "-p",
-                "0x4f3e910d1e438582dc520d8bd7c4ca43c92f50ee660b1a090bd8e237b7a102fc",
                 "-e",
                 "https://demov3.net955210.contentfabric.io/",
                 "-c",

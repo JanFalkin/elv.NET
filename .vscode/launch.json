@@ -8,10 +8,16 @@
             "preLaunchTask": "build",
             "program": "${workspaceFolder}/SignSample/bin/Debug/net6.0/SignSample.dll",
             "args": [
+                "-p",
+                "0x4f3e910d1e438582dc520d8bd7c4ca43c92f50ee660b1a090bd8e237b7a102fc",
                 "-e",
-                "https://host-76-74-28-235.contentfabric.io/eth/",
+                "https://demov3.net955210.contentfabric.io/",
                 "-c",
-                "0x9b29360efb1169c801bbcbe8e50d0664dcbc78d3"
+                "0x9b29360efb1169c801bbcbe8e50d0664dcbc78d3",
+                "-t",
+                "0x0a5bc8d97be691970df876534a3433901fafe5d9",
+                "-l",
+                "0x76d5287501f6d8e3b72AA34545C9cbf951702C74"
             ],
             "cwd": "${workspaceFolder}/SignSample",
             "stopAtEntry": false,

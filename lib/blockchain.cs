@@ -16,16 +16,20 @@ using Newtonsoft.Json.Linq;
 
 namespace Eluvio
 {
+    /// HttpHelper is a utility class that will provide a seamless wrapper around a Node config call selecting the first entry to use
+    /// There are static methods to GET POST and PUT various urls as the qfab api expects
     public class HttpHelper
     {
         delegate Task<HttpResponseMessage> PostCallDelegate(HttpClient client, string url, string token, HttpContent content);
-        public HttpHelper()
+        public HttpHelper(string mainNet)
         {
             client = new();
-            var restResult = CallRestApi(client, BlockchainPrimitives.baseURL + "config", "");
+            //
+            var restResult = CallGet(client, mainNet + "config", "");
             restResult.Wait();
             JObject jsonObject = JObject.Parse(restResult.Result);
             currentNode = jsonObject["network"]["seed_nodes"]["fabric_api"][0].ToString();
+            EthURL = jsonObject["network"]["seed_nodes"]["ethereum_api"][0].ToString();
         }
         private static async Task<string> CallHttp(HttpClient client, string url, string token, HttpContent content, JObject metadata, Delegate delCall)
         {
@@ -76,7 +80,7 @@ namespace Eluvio
             return await CallHttp(client, url, token, content, metadata, putDelegate);
         }
 
-        public static async Task<string> CallRestApi(HttpClient client, string url, string token)
+        public static async Task<string> CallGet(HttpClient client, string url, string token)
         {
             PostCallDelegate getDelegate = async (HttpClient client, string url, string token, HttpContent content) =>
             {
@@ -85,7 +89,6 @@ namespace Eluvio
             };
             return await CallHttp(client, url, token, null, null, getDelegate);
         }
-        readonly static string baseURL = "https://demov3.net955210.contentfabric.io/";
 
         private string GetBaseURL(string token, string libid, string qid, string format)
         {
@@ -102,7 +105,7 @@ namespace Eluvio
         public async Task<string> CallGetMetadata(string token, string libid, string qid)
         {
             string url = GetBaseURL(token, libid, qid, "/qlibs/{0}/q/{1}/meta");
-            return await CallRestApi(client, url, token);
+            return await CallGet(client, url, token);
         }
         public async Task<string> UpdateMetadata(string token, string libid, string qid, JObject jsonUpdate)
         {
@@ -116,6 +119,7 @@ namespace Eluvio
         }
 
         private readonly string currentNode;
+        public string EthURL { get; set; }
         private readonly HttpClient client;
 
 
@@ -251,24 +255,23 @@ namespace Eluvio
     public class BlockchainPrimitives : HttpHelper
     {
 
-        private void CommonConstruct(string url, string contractAddress)
+        private void CommonConstruct(string contractAddress, string contentTypeAddress, string libraryAddress)
         {
             account = new Nethereum.Web3.Accounts.Account(this.Key);
-            web3 = new Web3(this.account, url);
+            web3 = new Web3(this.account, EthURL);
             baseContract = contractAddress;
-            // contentService = new BaseContentService(web3, contractAddress);
-            // spaceService = new BaseContentSpaceService(web3, contractAddress);
-
+            this.contentTypeAddress = contentTypeAddress;
+            this.libraryAddress = libraryAddress;
         }
-        public BlockchainPrimitives(string url, string contractAddress) : base()
+        public BlockchainPrimitives(string mainNet, string contractAddress, string contentTypeAddress, string libraryAddress) : base(mainNet)
         {
             Key = EthECKey.GenerateKey().GetPrivateKeyAsBytes().ToHex();
-            CommonConstruct(url, contractAddress);
+            CommonConstruct(contractAddress, contentTypeAddress, libraryAddress);
         }
-        public BlockchainPrimitives(string key, string url, string contractAddress) : base()
+        public BlockchainPrimitives(string key, string mainNet, string contractAddress, string contentTypeAddress, string libraryAddress) : base(mainNet)
         {
             Key = key;
-            CommonConstruct(url, contractAddress);
+            CommonConstruct(contractAddress, contentTypeAddress, libraryAddress);
         }
 
 
@@ -299,6 +302,9 @@ namespace Eluvio
         public Nethereum.Web3.Accounts.Account account;
         public Web3 web3;
         public string baseContract;
+        public string contentTypeAddress;
+
+        public string libraryAddress;
 
     }
 

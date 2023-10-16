@@ -4,20 +4,36 @@ using Nethereum.Contracts;
 using Newtonsoft.Json.Linq;
 using McMaster.Extensions.CommandLineUtils;
 using Elv.NET.Contracts.BaseContentSpace;
-
+using Elv.NET.Contracts.BaseContentSpace.ContractDefinition;
 
 namespace SignSample;
 
 class Program
 {
+    /// This example performas a number of operations in order to create content on both the blockchain
+    /// and to mirror perform the necessary steps to include such content in the Eluvio Content Fabric
+    /// The sequence of steps are as follows
+    /// Given the following input:
+    ///   - private key 
+    ///   - Main Net endpoint 
+    ///   - contract Address
+    ///   - content Type Address, 
+    ///   - Library Address
+    ///  1) Instantiate a BaseContentSpaceService (baseContentSpace.abi) and call CreateContent which creates new content on the blockchain
+    ///  2) With new content address instantiate a BaseContentService (baseContent.abi) and make an UpdateRequest
+    ///  3) Using the TransactionId from step 2 form an Eluvio Token
+    ///  4) Using the new token from Step 3, call Edit on the new content
+    ///  5) Using write token from step 4, form some test metadata and set it on the write token calling update meta
+    ///  6) Finalize the content
+    ///  7) With the has acquired from finalization, call commit on the blockchain
     static async Task<bool> DoSampleAsync(BlockchainPrimitives bcp)
     {
         Console.OutputEncoding = System.Text.Encoding.UTF8;
         // This is content type 'ABR Master'
-        var ct = "0x0a5bc8d97be691970df876534a3433901fafe5d9";
+        var ct = bcp.contentTypeAddress;
         Console.WriteLine("content type = {0}", ct);
         // This is Lib Test_Lib
-        var libAddress = "0x76d5287501f6d8e3b72AA34545C9cbf951702C74";
+        var libAddress = bcp.libraryAddress;
         var libid = BlockchainUtils.LibFromBlockchainAddress(libAddress);
 
         var spaceService = new BaseContentSpaceService(bcp.web3, bcp.baseContract);
@@ -58,7 +74,7 @@ class Program
         var commitService = new BaseContentService(bcp.web3, decHash);
 
         var commitReceipt = BlockchainUtils.Commit(commitService, hash);
-        var cpe = commitReceipt.Logs.DecodeAllEvents<Elv.NET.Contracts.BaseContentSpace.ContractDefinition.CommitPendingEventDTO>();
+        var cpe = commitReceipt.Logs.DecodeAllEvents<CommitPendingEventDTO>();
         if (cpe.Count > 0)
         {
             Console.WriteLine("commitReceipt tx hash = {0}, tx idx {1}, hash pending {2}", commitReceipt.TransactionHash, commitReceipt.TransactionIndex, cpe[0].Event.ObjectHash);
@@ -69,11 +85,11 @@ class Program
         }
         return true;
     }
-    static int DoSample(string pwd, string ep, string contractAddr)
+    static int DoSample(string pwd, string ep, string contractAddr, string contentTypeAddress, string libraryAddress)
     {
         try
         {
-            BlockchainPrimitives bcp = new(pwd, ep, contractAddr);
+            BlockchainPrimitives bcp = new(pwd, ep, contractAddr, contentTypeAddress, libraryAddress);
             var f = DoSampleAsync(bcp);
             f.Wait();
         }
@@ -90,53 +106,34 @@ class Program
 
         app.HelpOption();
 
+        /// Reasonable sample values are provided in the usage message
+        /// The password will need to be provided at runtime to avoid leaking in code.
         var passwordOption = app.Option("-p|--pwd <PASSWORD>", "The password", CommandOptionType.SingleValue);
-        var endpoint = app.Option("-e|--ep <EndPoint>", "eth endpoint eg https://host-76-74-28-235.contentfabric.io/eth/", CommandOptionType.SingleValue);
+        var endpoint = app.Option("-e|--ep <EndPoint>", "eth endpoint eg https://demov3.net955210.contentfabric.io/", CommandOptionType.SingleValue);
         var contractAdress = app.Option("-c|--contract <Contract>", "Contract address eg \"0x9b29360efb1169c801bbcbe8e50d0664dcbc78d3\"", CommandOptionType.SingleValue);
+        var contentTypeAddress = app.Option("-t|--type <Type>", "Content Type address eg \"0x0a5bc8d97be691970df876534a3433901fafe5d9\"", CommandOptionType.SingleValue);
+        var LibraryAddress = app.Option("-l|--library <Library>", "Library address eg \"0x76d5287501f6d8e3b72AA34545C9cbf951702C74\"", CommandOptionType.SingleValue);
+
 
         app.OnExecute(() =>
         {
-            string? password = passwordOption.Value();
-
-            if (string.IsNullOrEmpty(password))
+            List<CommandOption> optionsList = new() { passwordOption, endpoint, contractAdress, contentTypeAddress, LibraryAddress };
+            List<string> optionVals = new() { "", "", "", "", "" };
+            var iOption = 0;
+            // Access the elements in the list
+            foreach (var option in optionsList)
             {
-                password = Environment.GetEnvironmentVariable("CHAIN_PASS");
-                if (password == null)
+                string? v = option.Value();
+                if (v == null || v == "")
                 {
-                    Console.WriteLine("Need a password!!");
+                    Console.WriteLine("Option {0} missing", optionVals[iOption]);
                     return -1;
                 }
-            }
-            else
-            {
-                Console.WriteLine($"Password provided: {password}");
+                optionVals[iOption] = v;
+                iOption++;
             }
 
-            string? ep = endpoint.Value();
-
-            if (string.IsNullOrEmpty(ep))
-            {
-                Console.WriteLine("Need an endpoint!!");
-                return -1;
-            }
-            else
-            {
-                Console.WriteLine($"Endpoint provided: {ep}");
-            }
-
-            string? contractAddr = contractAdress.Value();
-
-            if (string.IsNullOrEmpty(contractAddr))
-            {
-                Console.WriteLine("Need an contract address!!");
-                return -1;
-            }
-            else
-            {
-                Console.WriteLine($"Contract Address provided: {contractAddr}");
-            }
-
-            return DoSample(password, ep, contractAddr);
+            return DoSample(optionVals[0], optionVals[1], optionVals[2], optionVals[3], optionVals[4]);
         });
 
         app.Execute(args);

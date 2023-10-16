@@ -40,7 +40,7 @@ namespace libtest
                 {
                     Assert.Fail("Need a password!!");
                 }
-                BlockchainPrimitives bcp = new(pwd, "https://host-76-74-28-235.contentfabric.io/eth/", "0x9b29360efb1169c801bbcbe8e50d0664dcbc78d3");
+                BlockchainPrimitives bcp = new(pwd, "https://host-76-74-28-235.contentfabric.io/eth/", "0x9b29360efb1169c801bbcbe8e50d0664dcbc78d3", "0x0a5bc8d97be691970df876534a3433901fafe5d9", "0x76d5287501f6d8e3b72AA34545C9cbf951702C74");
                 Console.OutputEncoding = System.Text.Encoding.UTF8;
                 Debug.WriteLine(string.Format("MyFunkyKey = {0}", bcp.Key));
                 var spaceID = "66699ab88";
@@ -118,7 +118,7 @@ namespace libtest
                 {
                     Assert.Fail("Need a password!!");
                 }
-                BlockchainPrimitives bcp = new(pwd, "https://host-76-74-28-235.contentfabric.io/eth/", "0x9b29360efb1169c801bbcbe8e50d0664dcbc78d3");
+                BlockchainPrimitives bcp = new(pwd, "https://host-76-74-28-235.contentfabric.io/eth/", "0x9b29360efb1169c801bbcbe8e50d0664dcbc78d3", "0x0a5bc8d97be691970df876534a3433901fafe5d9", "0x76d5287501f6d8e3b72AA34545C9cbf951702C74");
                 Console.OutputEncoding = System.Text.Encoding.UTF8;
                 var spaceService = new BaseContentSpaceService(bcp.web3, bcp.baseContract);
 
